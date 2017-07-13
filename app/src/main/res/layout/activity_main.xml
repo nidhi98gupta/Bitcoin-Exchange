@@ -8,8 +8,8 @@
 
     <TextView
         android:id="@+id/InfoBox"
-        android:layout_width="319dp"
-        android:layout_height="140dp"
+        android:layout_width="351dp"
+        android:layout_height="507dp"
         android:text="TextView"
         android:layout_marginRight="8dp"
         app:layout_constraintRight_toRightOf="parent"
@@ -19,7 +19,8 @@
         android:layout_marginTop="8dp"
         android:layout_marginLeft="8dp"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintVertical_bias="0.349" />
+        app:layout_constraintVertical_bias="0.349"
+        tools:layout_editor_absoluteX="1dp" />
 
     <EditText
         android:id="@+id/editProfitLimit"

@@ -6,50 +6,46 @@ import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Looper;
 import android.support.v4.app.NotificationCompat;
+import android.support.v4.util.Pair;
 import android.util.Log;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
 import android.view.View;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.widget.Toast;
 
-import org.apache.http.params.HttpConnectionParams;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
-import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 import javax.net.ssl.HttpsURLConnection;
 
-import static android.provider.ContactsContract.CommonDataKinds.Website.URL;
-import static java.net.Proxy.Type.HTTP;
-
 public class MainActivity extends AppCompatActivity {
 
-    public float inrToeur;
-    public float EurRateBitstamp;
-    public float profit;
-    public float reqProfit;
+    public Double inrToeur;
+    public Double EurRateBitstamp;
+    public Double profit;
+    public Double reqProfit;
     private ProgressBar prog;
     private int count;
     private EditText editProfitLimit;
+    private Double quantity;
+    private Double BuyPrice;
+    private double exchangeRate=0.012;
+    private List<Pair<Double,Double>> BidsList ;
+    private List<Pair<Double,Double>> AsksList;
+    private List<Pair<Double,Double>> Profit;
     //spr.getStatus()
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,18 +57,17 @@ public class MainActivity extends AppCompatActivity {
        // prog.setEnabled(false);
         editProfitLimit=(EditText)findViewById(R.id.editProfitLimit);
         editProfitLimit.setText("10");
-        AsyncTask spr= new SendPostRequest().execute();
-        AsyncTask spr2=new SendPostRequest2().execute();
+        AsyncTask spr= new SendBuyBtcPostRequest().execute();
+        AsyncTask spr2=new GetSellPriceRequest().execute();
 
-
-
+        
     }
     public void callRatesAgain() throws InterruptedException {
 
-        AsyncTask spr= new SendPostRequest().execute();
-        AsyncTask spr2=new SendPostRequest2().execute();
+        AsyncTask spr= new SendBuyBtcPostRequest().execute();
+        AsyncTask spr2=new GetSellPriceRequest().execute();
     }
-    public void notify1(float profit) {
+    public void notify1(Double profit) {
 
         NotificationCompat.Builder mBuilder =
                 new NotificationCompat.Builder(this)
@@ -81,10 +76,10 @@ public class MainActivity extends AppCompatActivity {
                         .setContentText("Hello World!");
         Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
         try {
-                reqProfit=Float.parseFloat(editProfitLimit.getText().toString());
+                reqProfit=Double.parseDouble(editProfitLimit.getText().toString());
         }
           catch (NumberFormatException ex){
-              reqProfit=10;
+              reqProfit=10d;
           }
         if(profit>=reqProfit)
             mBuilder.setSound(soundUri);
@@ -95,7 +90,7 @@ public class MainActivity extends AppCompatActivity {
         mNotificationManager.notify(1, mBuilder.build());
 
     }
-   public class SendPostRequest extends AsyncTask<String, Void, String> {
+   public class SendBuyBtcPostRequest extends AsyncTask<String, Void, String> {
 
        protected void onPreExecute(){
 
@@ -108,31 +103,32 @@ public class MainActivity extends AppCompatActivity {
                 Thread.sleep(10000);
 
 
-               URL url=new URL("https://china-exchange.belfrics.com:443/gateway/public/lastTrades");
-               JSONObject postDataParams = new JSONObject();
+               URL url=new URL("https://api.coinsecure.in/v1/exchange/bid/orders");
+               /*JSONObject postDataParams = new JSONObject();
 
                postDataParams.put("market", "BTC-INR");
                postDataParams.put("count", 1);
                Log.e("params",postDataParams.toString());
+               */
                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                conn.setReadTimeout(15000 /* milliseconds */);
                conn.setConnectTimeout(15000 /* milliseconds */);
-               conn.setRequestMethod("POST");
+               conn.setRequestMethod("GET");
                conn.setDoInput(true);
-               conn.setDoOutput(true);
-
+               conn.setDoOutput(false);
+                /*
                OutputStream os = conn.getOutputStream();
                BufferedWriter writer = new BufferedWriter(
                        new OutputStreamWriter(os, "UTF-8"));
-               writer.write(String.valueOf(postDataParams));
+               //writer.write(String.valueOf(postDataParams));
 
               // writer.flush();
                writer.close();
                os.close();
-
+                */
                int responseCode=conn.getResponseCode();
 
-
+              //  Log.e("yoo",responseCode+"i");
                if (responseCode == HttpsURLConnection.HTTP_OK) {
 
                    BufferedReader in=new BufferedReader(
@@ -164,16 +160,18 @@ public class MainActivity extends AppCompatActivity {
 
        @Override
        protected void onPostExecute(String result) {
-                    prog.setVisibility(View.VISIBLE);
+           prog.setVisibility(View.VISIBLE);
           // Toast.makeText(getApplicationContext(), result,
             //       Toast.LENGTH_LONG).show();
+           Log.e("result",result);
            try {
                JSONObject json = new JSONObject(result);;
-               JSONArray arr=json.getJSONArray("results");
-               String rate=arr.getJSONObject(0).getString("rate");
-               inrToeur=Float.parseFloat(rate)/75f;
-
-               //Log.e("YO",bel);
+               JSONArray arr=json.getJSONArray("message");
+               BidsList=new ArrayList<Pair<Double,Double>>();
+               for(int i=0;i<arr.length();i++) {
+                   Pair<Double, Double> pair = new Pair<Double, Double>(arr.getJSONObject(i).getDouble("rate") * exchangeRate / 100, arr.getJSONObject(i).getDouble("vol") / 100000000.0);
+                   BidsList.add(i, pair);
+               }
 
            } catch (Exception e) {
            }
@@ -181,21 +179,22 @@ public class MainActivity extends AppCompatActivity {
        }
    }
 
-    public class SendPostRequest2 extends AsyncTask<String, Void, String> {
+    public class GetSellPriceRequest extends AsyncTask<String, Void, String> {
 
         protected void onPreExecute(){}
 
         protected String doInBackground(String... arg0) {
 
             try{
-                URL url=new URL("https://www.bitstamp.net/api/v2/ticker/btceur/");
+                //URL url=new URL("https://www.bitstamp.net/api/v2/ticker/btceur/");
+                URL url=new URL("https://webapi.coinfloor.co.uk:8090/bist/XBT/GBP/order_book/");
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setReadTimeout(15000 /* milliseconds */);
                 conn.setConnectTimeout(15000 /* milliseconds */);
-                conn.setRequestMethod("POST");
+                conn.setRequestMethod("GET");
                 conn.setDoInput(true);
-                conn.setDoOutput(true);
-
+                conn.setDoOutput(false);
+                /*
                 OutputStream os = conn.getOutputStream();
                 BufferedWriter writer = new BufferedWriter(
                         new OutputStreamWriter(os, "UTF-8"));
@@ -204,7 +203,7 @@ public class MainActivity extends AppCompatActivity {
                 // writer.flush();
                 writer.close();
                 os.close();
-
+                */
                 int responseCode=conn.getResponseCode();
 
 
@@ -242,24 +241,43 @@ public class MainActivity extends AppCompatActivity {
 
             //Toast.makeText(getApplicationContext(), result,
             //        Toast.LENGTH_LONG).show();
+            Log.e("result2",result);
             try {
 
                 JSONObject json = new JSONObject(result);
-                String bid=json.getString("bid");
+                JSONArray jsonArray=json.getJSONArray("asks");
+                AsksList=new ArrayList<Pair<Double,Double>>() ;
+                for(int i=0;i<jsonArray.length();i++){
+                    JSONArray jo=jsonArray.getJSONArray(i);
+                    Pair<Double,Double> pair=new Pair<>(jo.getDouble(0),jo.getDouble(1));
+                    AsksList.add(i,pair);
+                }
+                Log.e("BidsList",BidsList.toString());
+                Log.e("AsksList",AsksList.toString());
+                CalculateProfit(BidsList,AsksList);
+                /*String bid=json.getString("bid");
                 Log.e("YO",bid);
-                EurRateBitstamp=Float.parseFloat(bid);
+                EurRateBitstamp=Double.parseDouble(bid);
                 profit=((inrToeur*0.99f - EurRateBitstamp)/EurRateBitstamp)*100;
+                */
                 TextView textBox=(TextView)(findViewById(R.id.InfoBox));
-              //  prog.setEnabled(true);
+
+                prog.setEnabled(true);
                 prog.setVisibility(View.INVISIBLE);
                 prog.setEnabled(false);
                 prog.setBackgroundColor(1);
-                textBox.setText(" PROFIT ="+ profit);
+                textBox.setText("Bitcoins Transaction       Profit Percentage");
+                for(int i=0;i<10;i++){
+                    String bitcoinsToString = String.format("%.3f", Profit.get(i).first);
+                    String profitToString = String.format("%.2f", Profit.get(i).second);
+                    textBox.append("\n  "+bitcoinsToString+"                                "+profitToString);
+                }
+               /* textBox.setText(" PROFIT ="+ profit);
                 textBox.append("\n BUY ="+EurRateBitstamp );
                 textBox.append("\n SELL = "+inrToeur);
+                */
 
-
-                notify1(profit);
+                notify1(Profit.get(0).second);
                 //Thread.sleep(10000);
                 callRatesAgain();
                 count++;
@@ -269,6 +287,41 @@ public class MainActivity extends AppCompatActivity {
             }
 
         }
+    }
+
+
+
+    public void CalculateProfit(List<Pair<Double,Double>> BidsList,List<Pair<Double,Double>> AsksList)
+    {
+        Profit=new ArrayList<Pair<Double, Double>>();
+        Pair<Double,Double> profitPair;
+         double bitcoins;
+        int m=0,n=0;
+       for(int i=0;i<10;i++){
+            if(BidsList.get(m).second>AsksList.get(n).second){
+                bitcoins= AsksList.get(n).second;
+                profit=((BidsList.get(m).first-AsksList.get(n).first)*100)/AsksList.get(n).first ;
+                Pair<Double,Double> pair=new Pair<>(BidsList.get(m).first,BidsList.get(m).second-AsksList.get(n).second);
+                BidsList.set(m,pair);
+                n++;
+
+            }
+            else
+            {
+                bitcoins= BidsList.get(m).second;
+                profit=((BidsList.get(m).first-AsksList.get(n).first)*100)/AsksList.get(n).first ;
+                Pair<Double,Double> pair=new Pair<>(AsksList.get(n).first,AsksList.get(n).second-BidsList.get(m).second);
+                AsksList.set(n,pair);
+                m++;
+
+            }
+
+
+              profitPair =new Pair<>(bitcoins,profit);
+              Profit.add(i,profitPair);
+
+       }
+       Log.e("Profit",Profit.toString()) ;
     }
 
 }
